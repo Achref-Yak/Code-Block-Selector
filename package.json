@@ -105,7 +105,9 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "reinstall": "npm run compile && vsce package --allow-missing-repository && (code --uninstall-extension agilm.code-block-selector 2>/dev/null || true) && code --force --install-extension code-block-selector-0.1.0.vsix"
+    "package": "npm run compile && vsce package",
+    "install-ext": "code --install-extension $(ls *.vsix | tail -n 1)",
+    "reinstall": "npm run package && npm run install-ext"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
