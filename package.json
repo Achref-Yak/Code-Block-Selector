@@ -1,0 +1,118 @@
+{
+  "name": "code-block-selector",
+  "displayName": "Code Block Selector",
+  "description": "Hover over code to highlight blocks, then Alt+Enter to select, Alt+Up/Down to expand or shrink.",
+  "version": "0.1.2",
+  "publisher": "agilm",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "activationEvents": [
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact",
+    "onLanguage:python",
+    "onLanguage:go",
+    "onCommand:code-block-selector.selectBlock",
+    "onCommand:code-block-selector.expandSelection",
+    "onCommand:code-block-selector.shrinkSelection",
+    "onCommand:code-block-selector.toggleHighlight"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "code-block-selector.selectBlock",
+        "title": "Select Block",
+        "category": "Code Block Selector"
+      },
+      {
+        "command": "code-block-selector.expandSelection",
+        "title": "Expand Block Selection",
+        "category": "Code Block Selector"
+      },
+      {
+        "command": "code-block-selector.shrinkSelection",
+        "title": "Shrink Block Selection",
+        "category": "Code Block Selector"
+      },
+      {
+        "command": "code-block-selector.toggleHighlight",
+        "title": "Toggle Block Highlighting",
+        "category": "Code Block Selector"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "code-block-selector.selectBlock",
+        "key": "alt+enter",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "code-block-selector.expandSelection",
+        "key": "alt+up",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "code-block-selector.shrinkSelection",
+        "key": "alt+down",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "code-block-selector.toggleHighlight",
+        "key": "alt+shift+h",
+        "when": "editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "Code Block Selector",
+      "properties": {
+        "code-block-selector.highlightColor": {
+          "type": "string",
+          "default": "rgba(100,150,255,0.15)",
+          "description": "Background color for highlighted code blocks"
+        },
+        "code-block-selector.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show current code block type in status bar"
+        },
+        "code-block-selector.enabledLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "javascript",
+            "typescript",
+            "javascriptreact",
+            "typescriptreact",
+            "python",
+            "go"
+          ],
+          "description": "Language IDs to enable AST selection for"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "reinstall": "npm run compile && vsce package --allow-missing-repository && (code --uninstall-extension agilm.code-block-selector 2>/dev/null || true) && code --force --install-extension code-block-selector-0.1.0.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "tree-sitter-go": "^0.23.4",
+    "tree-sitter-javascript": "^0.23.1",
+    "tree-sitter-python": "^0.23.6",
+    "tree-sitter-typescript": "^0.23.2",
+    "web-tree-sitter": "^0.23.2"
+  }
+}
