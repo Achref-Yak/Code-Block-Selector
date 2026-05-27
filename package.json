@@ -105,8 +105,8 @@
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
-    "package": "npm run compile && vsce package",
-    "install-ext": "code --install-extension $(ls *.vsix | tail -n 1)",
+    "package": "npm run compile && rm -f *.vsix && vsce package --allow-missing-repository",
+    "install-ext": "code --install-extension $(ls -t *.vsix | head -n 1)",
     "reinstall": "npm run package && npm run install-ext"
   },
   "devDependencies": {

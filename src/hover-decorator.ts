@@ -233,8 +233,8 @@ export class HoverDecorator {
     }
 
     if (!this.isEnabled) {
-      this.statusBarItem.text = '$(eye-closed) Selectextention: off';
-      this.statusBarItem.tooltip = 'AST highlighting is disabled. Click to enable.';
+      this.statusBarItem.text = '$(eye-closed) Code Block Selector: off';
+      this.statusBarItem.tooltip = 'Code block highlighting is disabled. Click to enable.';
       this.statusBarItem.command = 'code-block-selector.toggleHighlight';
     } else if (this.currentSelection) {
       const text = `$(symbol-method) ${this.currentSelection.type}`;
@@ -244,11 +244,11 @@ export class HoverDecorator {
       this.statusBarItem.tooltip = `AST Node: ${this.currentSelection.type}\nClick to select this block`;
       this.statusBarItem.command = 'code-block-selector.selectBlock';
     } else {
-      const text = '$(eye) Selectextention: on';
+      const text = '$(eye) Code Block Selector: on';
       if (text === this.lastStatusBarText) return;
       this.lastStatusBarText = text;
       this.statusBarItem.text = text;
-      this.statusBarItem.tooltip = 'AST highlighting is enabled. Hover over code to see highlights.';
+      this.statusBarItem.tooltip = 'Code block highlighting is enabled. Hover over code to see highlights.';
       this.statusBarItem.command = 'code-block-selector.toggleHighlight';
     }
 
