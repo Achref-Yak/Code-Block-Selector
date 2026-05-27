@@ -4,6 +4,10 @@
   "description": "Hover over code to highlight blocks, then Alt+Enter to select, Alt+Up/Down to expand or shrink.",
   "version": "0.1.2",
   "publisher": "agilm",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agilm/code-block-selector.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
