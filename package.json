@@ -111,6 +111,7 @@
     "typecheck": "tsc -p ./ --noEmit",
     "watch": "node esbuild.config.js --watch",
     "lint": "eslint src",
+    "test": "vitest run",
     "package": "npm run compile && rm -f *.vsix && vsce package --allow-missing-repository",
     "install-ext": "code --install-extension $(ls -t *.vsix | head -n 1)",
     "reinstall": "npm run package && npm run install-ext"
@@ -124,7 +125,8 @@
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "typescript": "^5.3.0",
-    "typescript-eslint": "^8.60.0"
+    "typescript-eslint": "^8.60.0",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
     "tree-sitter-go": "^0.23.4",

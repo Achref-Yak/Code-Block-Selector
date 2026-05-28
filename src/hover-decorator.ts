@@ -132,12 +132,29 @@ export class HoverDecorator {
   }
 
   selectCurrentBlock() {
-    if (!this.currentSelection || !this.currentEditor) return;
-    this.currentEditor.selection = new vscode.Selection(
-      this.currentSelection.range.start,
-      this.currentSelection.range.end
-    );
-    this.currentEditor.revealRange(this.currentSelection.range);
+    const editor = vscode.window.activeTextEditor;
+    if (!editor) return;
+
+    if (editor.selections.length > 1) {
+      this.isUpdatingSelection = true;
+      const newSelections = editor.selections.map((sel) => {
+        const selection = this.astSelector.getSelectionAtPosition(editor.document, sel.active);
+        if (selection) {
+          return new vscode.Selection(selection.range.start, selection.range.end);
+        }
+        return sel;
+      });
+      editor.selections = newSelections;
+      editor.revealRange(newSelections[0]);
+      this.isUpdatingSelection = false;
+    } else {
+      if (!this.currentSelection || !this.currentEditor) return;
+      this.currentEditor.selection = new vscode.Selection(
+        this.currentSelection.range.start,
+        this.currentSelection.range.end
+      );
+      this.currentEditor.revealRange(this.currentSelection.range);
+    }
   }
 
   expandSelection() {
