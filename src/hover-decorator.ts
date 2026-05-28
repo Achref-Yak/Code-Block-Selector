@@ -17,6 +17,7 @@ export class HoverDecorator {
   private lastDecoratedKey: string | undefined;
   private lastStatusBarText: string | undefined;
   private throttleTimer: ReturnType<typeof setTimeout> | undefined;
+  private debounceDelay: number;
 
   constructor(
     private parserManager: ParserManager,
@@ -25,6 +26,10 @@ export class HoverDecorator {
     const highlightColor = vscode.workspace
       .getConfiguration('code-block-selector')
       .get<string>('highlightColor', 'rgba(100,150,255,0.15)');
+
+    this.debounceDelay = vscode.workspace
+      .getConfiguration('code-block-selector')
+      .get<number>('debounceDelay', 50);
 
     this.decorationType = vscode.window.createTextEditorDecorationType({
       backgroundColor: highlightColor,
@@ -75,7 +80,7 @@ export class HoverDecorator {
         this.throttleTimer = setTimeout(() => {
           this.throttleTimer = undefined;
           this.updateHighlightFromPosition(document, position);
-        }, 50);
+        }, this.debounceDelay);
       }
     });
 
@@ -260,9 +265,9 @@ export class HoverDecorator {
   }
 
   updateSettings() {
-    const highlightColor = vscode.workspace
-      .getConfiguration('code-block-selector')
-      .get<string>('highlightColor', 'rgba(100,150,255,0.15)');
+    const config = vscode.workspace.getConfiguration('code-block-selector');
+    const highlightColor = config.get<string>('highlightColor', 'rgba(100,150,255,0.15)');
+    this.debounceDelay = config.get<number>('debounceDelay', 50);
 
     this.decorationType.dispose();
     this.decorationType = vscode.window.createTextEditorDecorationType({

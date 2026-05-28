@@ -96,14 +96,20 @@
             "go"
           ],
           "description": "Language IDs to enable AST selection for"
+        },
+        "code-block-selector.debounceDelay": {
+          "type": "number",
+          "default": 50,
+          "description": "Delay in milliseconds before updating highlight after cursor movement"
         }
       }
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "vscode:prepublish": "npm run typecheck && npm run compile",
+    "compile": "node esbuild.config.js",
+    "typecheck": "tsc -p ./ --noEmit",
+    "watch": "node esbuild.config.js --watch",
     "lint": "eslint src",
     "package": "npm run compile && rm -f *.vsix && vsce package --allow-missing-repository",
     "install-ext": "code --install-extension $(ls -t *.vsix | head -n 1)",
@@ -115,6 +121,7 @@
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^8.60.0",
     "@typescript-eslint/parser": "^8.60.0",
+    "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
     "typescript": "^5.3.0",
     "typescript-eslint": "^8.60.0"
