@@ -18,6 +18,7 @@ export class HoverDecorator {
   private lastStatusBarText: string | undefined;
   private throttleTimer: ReturnType<typeof setTimeout> | undefined;
   private debounceDelay: number;
+  private highlightReqId = 0;
 
   constructor(
     private parserManager: ParserManager,
@@ -90,7 +91,7 @@ export class HoverDecorator {
     });
   }
 
-  private updateHighlightFromPosition(document: vscode.TextDocument, position: vscode.Position) {
+  private async updateHighlightFromPosition(document: vscode.TextDocument, position: vscode.Position) {
     if (!this.isEnabled || this.isUpdatingSelection) return;
 
     const key = `${document.uri.toString()}:${position.line}:${position.character}`;
@@ -110,7 +111,11 @@ export class HoverDecorator {
       return;
     }
 
-    const selection = this.astSelector.getSelectionAtPosition(document, position);
+    const reqId = ++this.highlightReqId;
+    const selection = await this.astSelector.getSelectionAtPosition(document, position);
+
+    if (reqId !== this.highlightReqId) return;
+
     if (!selection) {
       this.clearHighlight();
       return;
@@ -131,16 +136,21 @@ export class HoverDecorator {
     this.updateStatusBar();
   }
 
-  selectCurrentBlock() {
+  async selectCurrentBlock() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
     if (editor.selections.length > 1) {
       this.isUpdatingSelection = true;
-      const newSelections = editor.selections.map((sel) => {
-        const selection = this.astSelector.getSelectionAtPosition(editor.document, sel.active);
-        if (selection) {
-          return new vscode.Selection(selection.range.start, selection.range.end);
+      const results = await Promise.all(
+        editor.selections.map((sel) =>
+          this.astSelector.getSelectionAtPosition(editor.document, sel.active)
+        )
+      );
+      const newSelections = editor.selections.map((sel, i) => {
+        const result = results[i];
+        if (result) {
+          return new vscode.Selection(result.range.start, result.range.end);
         }
         return sel;
       });
@@ -157,13 +167,14 @@ export class HoverDecorator {
     }
   }
 
-  expandSelection() {
-    if (!this.currentEditor) return;
-    
-    if (!this.currentSelection) return;
+  async expandSelection() {
+    if (!this.currentEditor || !this.currentSelection) return;
 
     this.selectionHistory.push(this.currentSelection);
-    const expanded = this.astSelector.expandSelection(this.currentSelection);
+    const expanded = await this.astSelector.expandSelection(
+      this.currentEditor.document,
+      this.currentSelection
+    );
     if (expanded) {
       this.isUpdatingSelection = true;
       this.currentSelection = expanded;
@@ -181,7 +192,7 @@ export class HoverDecorator {
     }
   }
 
-  shrinkSelection() {
+  async shrinkSelection() {
     if (!this.currentEditor) return;
 
     if (this.selectionHistory.length > 0) {
@@ -204,7 +215,10 @@ export class HoverDecorator {
       const midLine = Math.floor((this.currentSelection.range.start.line + this.currentSelection.range.end.line) / 2);
       const midCol = Math.floor((this.currentSelection.range.start.character + this.currentSelection.range.end.character) / 2);
       this.astSelector.setCursorPoint({ row: midLine, column: midCol });
-      const shrunk = this.astSelector.shrinkSelection(this.currentSelection);
+      const shrunk = await this.astSelector.shrinkSelection(
+        this.currentEditor.document,
+        this.currentSelection
+      );
       if (shrunk) {
         this.isUpdatingSelection = true;
         this.currentSelection = shrunk;

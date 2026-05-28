@@ -7,22 +7,22 @@ export function registerCommands(
 ) {
   const selectBlock = vscode.commands.registerCommand(
     'code-block-selector.selectBlock',
-    () => {
-      decorator.selectCurrentBlock();
+    async () => {
+      await decorator.selectCurrentBlock();
     }
   );
 
   const expandSelection = vscode.commands.registerCommand(
     'code-block-selector.expandSelection',
-    () => {
-      decorator.expandSelection();
+    async () => {
+      await decorator.expandSelection();
     }
   );
 
   const shrinkSelection = vscode.commands.registerCommand(
     'code-block-selector.shrinkSelection',
-    () => {
-      decorator.shrinkSelection();
+    async () => {
+      await decorator.shrinkSelection();
     }
   );
 

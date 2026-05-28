@@ -1,45 +1,33 @@
 import * as vscode from 'vscode';
-import * as fs from 'fs/promises';
-import Parser, { SyntaxNode } from 'web-tree-sitter';
+import { Worker } from 'worker_threads';
 
-const PARSER_CONFIG: Record<string, { grammar: string; wasm: string }> = {
-  javascript: { grammar: 'javascript', wasm: 'tree-sitter-javascript.wasm' },
-  typescript: { grammar: 'typescript', wasm: 'tree-sitter-typescript.wasm' },
-  javascriptreact: { grammar: 'javascript', wasm: 'tree-sitter-javascript.wasm' },
-  typescriptreact: { grammar: 'typescript', wasm: 'tree-sitter-typescript.wasm' },
-  python: { grammar: 'python', wasm: 'tree-sitter-python.wasm' },
-  go: { grammar: 'go', wasm: 'tree-sitter-go.wasm' },
-};
+export interface SerializedSelection {
+  type: string;
+  startLine: number;
+  startChar: number;
+  endLine: number;
+  endChar: number;
+  key: string;
+}
 
-interface CachedTree {
-  tree: Parser.Tree;
-  version: number;
+interface PendingRequest {
+  resolve: (value: unknown) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 export class ParserManager {
-  private parser: Parser | null = null;
-  private parsers = new Map<string, Parser.Language>();
-  private wasmBuffers = new Map<string, Buffer>();
+  private worker: Worker | null = null;
   private initialized = false;
-  private initPromise: Promise<void> | null = null;
-  private wasmPaths = new Map<string, string>();
-  private treeCache = new Map<string, CachedTree>();
+  private initPromise: Promise<boolean> | null = null;
+  private nextId = 1;
+  private pending = new Map<number, PendingRequest>();
   private closeListener: vscode.Disposable | undefined;
   private onReparseCallbacks: Array<() => void> = [];
-  private lastLanguageId: string | undefined;
 
   constructor(private extensionUri: vscode.Uri) {
-    for (const [, config] of Object.entries(PARSER_CONFIG)) {
-      if (!this.wasmPaths.has(config.grammar)) {
-        this.wasmPaths.set(
-          config.grammar,
-          vscode.Uri.joinPath(this.extensionUri, 'parsers', config.wasm).fsPath
-        );
-      }
-    }
-
     this.closeListener = vscode.workspace.onDidCloseTextDocument((doc) => {
-      this.purgeTreeCache(doc.uri.toString());
+      this.clearCache(doc.uri.toString());
     });
   }
 
@@ -47,87 +35,160 @@ export class ParserManager {
     return this.initialized;
   }
 
-  async ensureInitialized(): Promise<void> {
-    if (this.initialized) return;
+  async ensureInitialized(): Promise<boolean> {
+    if (this.initialized) return true;
     if (this.initPromise) return this.initPromise;
 
     this.initPromise = this.doInitialize();
     return this.initPromise;
   }
 
-  private async doInitialize() {
-    await Parser.init();
-    this.parser = new Parser();
+  private async doInitialize(): Promise<boolean> {
+    try {
+      const workerPath = vscode.Uri.joinPath(
+        this.extensionUri, 'dist', 'parser-worker.js'
+      ).fsPath;
 
-    const uniqueGrammars = new Map<string, string>();
-    for (const [langId, config] of Object.entries(PARSER_CONFIG)) {
-      if (!uniqueGrammars.has(config.grammar)) {
-        uniqueGrammars.set(config.grammar, langId);
-      }
-    }
+      const wasmRoot = vscode.Uri.joinPath(
+        this.extensionUri, 'parsers'
+      ).fsPath;
 
-    const loadPromises = Array.from(uniqueGrammars.entries()).map(
-      async ([grammar, representativeLangId]) => {
-        try {
-          const wasmPath = this.wasmPaths.get(grammar);
-          if (!wasmPath) return;
+      this.worker = new Worker(workerPath);
+      this.worker.on('message', (msg: { id: number; type: string } & Record<string, unknown>) => {
+        const pending = this.pending.get(msg.id);
+        if (!pending) return;
+        clearTimeout(pending.timer);
+        this.pending.delete(msg.id);
+        pending.resolve(msg);
+      });
 
-          let buffer = this.wasmBuffers.get(grammar);
-          if (!buffer) {
-            buffer = await fs.readFile(wasmPath);
-            this.wasmBuffers.set(grammar, buffer);
-          }
-
-          const lang = await Parser.Language.load(buffer);
-          this.parsers.set(representativeLangId, lang);
-
-          for (const [langId, cfg] of Object.entries(PARSER_CONFIG)) {
-            if (cfg.grammar === grammar && langId !== representativeLangId) {
-              this.parsers.set(langId, lang);
-            }
-          }
-        } catch (e) {
-          console.error(`[code-block-selector] Failed to load parser for ${grammar}:`, e);
+      this.worker.on('error', (err) => {
+        console.error('[code-block-selector] Worker error:', err);
+        for (const [id, { reject, timer }] of this.pending) {
+          clearTimeout(timer);
+          this.pending.delete(id);
+          reject(err);
         }
+      });
+
+      this.worker.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(`[code-block-selector] Worker exited with code ${code}`);
+        }
+        this.initialized = false;
+        this.worker = null;
+      });
+
+      const result = await this.sendRequest('init', { wasmRoot });
+      this.initialized = (result as { success: boolean }).success;
+      return this.initialized;
+    } catch (e) {
+      console.error('[code-block-selector] Worker initialization failed:', e);
+      return false;
+    }
+  }
+
+  private sendRequest(type: string, payload: Record<string, unknown> = {}): Promise<unknown> {
+    if (!this.worker) {
+      return Promise.reject(new Error('Worker not initialized'));
+    }
+
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Worker request ${type}:${id} timed out`));
+      }, 10000);
+
+      this.pending.set(id, { resolve, reject, timer });
+      this.worker!.postMessage({ id, type, ...payload });
+    });
+  }
+
+  async parseDocument(document: vscode.TextDocument): Promise<boolean> {
+    if (!this.initialized) {
+      await this.ensureInitialized();
+    }
+    if (!this.initialized || !this.worker) return false;
+
+    try {
+      const result = await this.sendRequest('parse', {
+        uri: document.uri.toString(),
+        version: document.version,
+        text: document.getText(),
+        languageId: document.languageId,
+      });
+
+      if ((result as { success: boolean }).success) {
+        for (const cb of this.onReparseCallbacks) {
+          cb();
+        }
+        return true;
       }
-    );
-
-    await Promise.all(loadPromises);
-    this.initialized = this.parsers.size > 0;
+      return false;
+    } catch (_e) {
+      console.error('[code-block-selector] Parse failed');
+      return false;
+    }
   }
 
-  async ensureLanguageLoaded(languageId: string): Promise<void> {
-    if (this.parsers.has(languageId)) return;
-    await this.ensureInitialized();
+  async selectAtPosition(
+    document: vscode.TextDocument,
+    position: vscode.Position
+  ): Promise<SerializedSelection | null> {
+    if (!this.initialized) {
+      await this.ensureInitialized();
+    }
+    if (!this.initialized || !this.worker) return null;
+
+    await this.parseDocument(document);
+
+    try {
+      const result = await this.sendRequest('select', {
+        uri: document.uri.toString(),
+        line: position.line,
+        character: position.character,
+      });
+      const sel = (result as { selection: SerializedSelection | null }).selection;
+      return sel;
+    } catch (_e) {
+      return null;
+    }
   }
 
-  getParser(languageId: string): Parser.Language | undefined {
-    return this.parsers.get(languageId);
+  async expandSelection(
+    uri: string,
+    key: string
+  ): Promise<SerializedSelection | null> {
+    if (!this.worker) return null;
+
+    try {
+      const result = await this.sendRequest('expand', { uri, key });
+      return (result as { selection: SerializedSelection | null }).selection;
+    } catch (_e) {
+      return null;
+    }
   }
 
-  parseDocument(document: vscode.TextDocument): Parser.Tree | undefined {
-    const lang = this.getParser(document.languageId);
-    if (!lang || !this.parser) return undefined;
+  async shrinkSelection(
+    uri: string,
+    key: string,
+    line: number,
+    character: number
+  ): Promise<SerializedSelection | null> {
+    if (!this.worker) return null;
 
-    const uri = document.uri.toString();
-    const cached = this.treeCache.get(uri);
-    if (cached && cached.version === document.version) {
-      return cached.tree;
+    try {
+      const result = await this.sendRequest('shrink', { uri, key, line, character });
+      return (result as { selection: SerializedSelection | null }).selection;
+    } catch (_e) {
+      return null;
     }
+  }
 
-    if (this.lastLanguageId !== document.languageId) {
-      this.parser.setLanguage(lang);
-      this.lastLanguageId = document.languageId;
-    }
-    const oldTree = cached?.tree;
-    const tree = this.parser.parse(document.getText(), oldTree);
-    this.treeCache.set(uri, { tree, version: document.version });
-
-    for (const cb of this.onReparseCallbacks) {
-      cb();
-    }
-
-    return tree;
+  private clearCache(uri: string): void {
+    if (!this.worker) return;
+    this.sendRequest('clear', { uri }).catch(() => {});
   }
 
   onReparse(callback: () => void): vscode.Disposable {
@@ -138,27 +199,17 @@ export class ParserManager {
     });
   }
 
-  purgeTreeCache(uri: string): void {
-    const cached = this.treeCache.get(uri);
-    if (cached) {
-      cached.tree.delete();
-    }
-    this.treeCache.delete(uri);
-  }
-
   dispose(): void {
-    for (const cached of this.treeCache.values()) {
-      cached.tree.delete();
-    }
-    this.treeCache.clear();
     this.closeListener?.dispose();
-  }
-
-  getNodeAtPosition(document: vscode.TextDocument, position: vscode.Position): SyntaxNode | undefined {
-    const tree = this.parseDocument(document);
-    if (!tree) return undefined;
-
-    const point = { row: position.line, column: position.character };
-    return tree.rootNode.descendantForPosition(point);
+    if (this.worker) {
+      this.sendRequest('clear').catch(() => {});
+      for (const [, { reject, timer }] of this.pending) {
+        clearTimeout(timer);
+        reject(new Error('ParserManager disposed'));
+      }
+      this.pending.clear();
+      this.worker.terminate();
+      this.worker = null;
+    }
   }
 }
