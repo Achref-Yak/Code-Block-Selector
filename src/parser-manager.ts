@@ -26,9 +26,10 @@ export class ParserManager {
   private treeCache = new Map<string, CachedTree>();
   private closeListener: vscode.Disposable | undefined;
   private onReparseCallbacks: Array<() => void> = [];
+  private lastLanguageId: string | undefined;
 
   constructor(private extensionUri: vscode.Uri) {
-    for (const [langId, config] of Object.entries(PARSER_CONFIG)) {
+    for (const [, config] of Object.entries(PARSER_CONFIG)) {
       if (!this.wasmPaths.has(config.grammar)) {
         this.wasmPaths.set(
           config.grammar,
@@ -114,7 +115,10 @@ export class ParserManager {
       return cached.tree;
     }
 
-    this.parser.setLanguage(lang);
+    if (this.lastLanguageId !== document.languageId) {
+      this.parser.setLanguage(lang);
+      this.lastLanguageId = document.languageId;
+    }
     const oldTree = cached?.tree;
     const tree = this.parser.parse(document.getText(), oldTree);
     this.treeCache.set(uri, { tree, version: document.version });

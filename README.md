@@ -2,6 +2,8 @@
 
 Hover over code to highlight blocks, then Alt+Enter to select, Alt+Up/Down to expand or shrink.
 
+![Preview](preview.gif)
+
 ## Features
 
 - **Hover to highlight** — move your cursor over code to highlight the AST block

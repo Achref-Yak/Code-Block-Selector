@@ -51,8 +51,12 @@ export class HoverDecorator {
   }
 
   activate(enabledLanguages: string[]): vscode.Disposable {
+    const supportedSchemes = ['file', 'untitled'];
+    const documents = enabledLanguages.flatMap((lang) =>
+      supportedSchemes.map((scheme) => ({ language: lang, scheme }))
+    );
     this.hoverProvider = vscode.languages.registerHoverProvider(
-      enabledLanguages.map((lang) => ({ language: lang, scheme: 'file' })),
+      documents,
       {
         provideHover: async (document, position) => {
           this.updateHighlightFromPosition(document, position);
@@ -174,10 +178,10 @@ export class HoverDecorator {
       return;
     }
 
-    const position = this.currentEditor.selection.active;
-    this.astSelector.setCursorPoint({ row: position.line, column: position.character });
-
     if (this.currentSelection) {
+      const midLine = Math.floor((this.currentSelection.range.start.line + this.currentSelection.range.end.line) / 2);
+      const midCol = Math.floor((this.currentSelection.range.start.character + this.currentSelection.range.end.character) / 2);
+      this.astSelector.setCursorPoint({ row: midLine, column: midCol });
       const shrunk = this.astSelector.shrinkSelection(this.currentSelection);
       if (shrunk) {
         this.isUpdatingSelection = true;
