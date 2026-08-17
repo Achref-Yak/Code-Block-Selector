@@ -4,10 +4,10 @@ const { join } = require('path');
 
 async function build() {
   await esbuild.build({
-    entryPoints: ['src/extension.ts', 'src/parser-worker.ts'],
+    entryPoints: ['src/extension.ts'],
     bundle: true,
     outdir: 'dist',
-    external: ['vscode'],
+    external: ['vscode', 'web-tree-sitter'],
     platform: 'node',
     target: 'es2020',
     format: 'cjs',

@@ -2,7 +2,7 @@
   "name": "code-block-selector",
   "displayName": "Code Block Selector",
   "description": "Hover over code to highlight blocks, then Alt+Enter to select, Alt+Up/Down to expand or shrink.",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "publisher": "agilm",
   "repository": {
     "type": "git",

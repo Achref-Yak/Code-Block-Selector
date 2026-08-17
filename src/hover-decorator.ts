@@ -108,6 +108,14 @@ export class HoverDecorator {
         this.statusBarItem.tooltip = 'Parser initialization in progress.';
         this.statusBarItem.show();
       }
+      this.parserManager.ensureInitialized().then((success) => {
+        if (success) {
+          this.updateStatusBar();
+        } else if (showStatusBar) {
+          this.statusBarItem.text = '$(error) Code Block Selector: init failed';
+          this.statusBarItem.tooltip = 'Parser initialization failed. Reload window to retry.';
+        }
+      });
       return;
     }
 
